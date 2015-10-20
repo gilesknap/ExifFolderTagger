@@ -8,29 +8,59 @@ class ExifFolderTagger:
         self.do_exif = do_exif
         self.do_write = do_write
         # Default Values for control parameters
-        # User should set these as necessary
+        # User should set these as necessary after instantiating a ExifFolderTagger object
+
+        # root folder to start scan from
+        # windows file names also supported
         self.root_folder = os.path.abspath("/mnt/E_DRIVE/PhotosWithTagsTmp")
+
+        # exif tags to look at - the first is checked for existing text which is appended to the folder description
         self.tag_names = [
             "Exif.Image.ImageDescription",
             "Xmp.dc.Description",
             "Xmp.dc.Title",
         ]
+
+        # expressions to apply to the full path in a tuple with the folder description formatter to apply if this
+        # expression matches
+        # These default expressions match files from the following examples
+        #       "root/2015/2015-12-25 Christmas Family Visit/photo1.jpg"
+        #       "root/2015/1225 Christmas Family Visit/photo1.jpg"
+        #       "root/2015/Work Stuff/photo1.jpg"
+        #       "root/2015/photo1.jpg"
+        # and builds folder descriptions of the form:-
+        #       Y2015 M12 D25 Christmas Family Visit
+        # (where Mxx and Dxx will not be provided fot the last two)
+        # Sub-folders further down are also supported but we replace "/" with " - "
+        # This scheme has been shown to make the files usefully searchable in Google photos
         self.expressions = [
             (re.compile('(\d\d\d\d)/\d\d\d\d-(\d\d)-(\d\d).(.*)'), 'Y%s M%s D%s %s'),
             (re.compile('(\d\d\d\d)/(\d\d)(\d\d).(.*)'), 'Y%s M%s D%s %s'),
             (re.compile('(\d\d\d\d)[/ -](.*)'), 'Y%s %s'),
             (re.compile('(\d\d\d\d)'), 'Y%s'),
         ]
+
+        # expression that matches all folder description formatters above - used to detect an already processed tag
         self.already_renamed_exp = re.compile('Y\d\d\d\d.*')
+
+        # list of file extension to which we apply exif tags (use lower case only)
+        self.extensions_to_exif_tag = [
+            '.jpg'
+        ]
+
+        # list of file extensions to rename - these filetypes are uploaded to google photos but have no exif -
+        # google photos does search on filename so these will still be searchable (use lower case only)
         self.extensions_to_rename = [
             '.tif', '.gif', '.mpg', '.mp4', '.avi', '.bmp', '.mov', '.png', '.wmv', '.3gp', '.ico'
         ]
+
+        # if the first exif tag contains one of these strings then do not preserve - just overwrite
+        # (e.g. descriptions that were auto added by some cameras and do not add any info)
         self.descriptions_to_ignore = [
-            'DCP', 'DIGITAL CAMERA', 'Camera',
         ]
+
+        # clean these files out of the photo folders (use lower case only)
         self.extensions_to_remove = [
-            '.db', '.ini', '.info', '.exe', '.url', '.jpg2768', '.jpg4332', '.tmp', '.wav', '.txt', '.thm',
-            '.rss', '.eml', '.rtf', '.dat', '.pdf', '.doc', '.ivr', '.psd', '.jbf', '.mix', '.scn',
         ]
 
         # Initialize members for gathering results
@@ -39,6 +69,10 @@ class ExifFolderTagger:
         self.out_count_jpg = 0
         self.out_count_non_jpg = 0
         self.out_renamed = 0
+        self.out_ignored = 0
+        self.out_skipped = 0
+        self.out_exif_changed = 0
+        self.out_removed = 0
 
         if do_exif:
             from gi.repository import GExiv2
@@ -63,7 +97,7 @@ class ExifFolderTagger:
             for filename in fileList:
                 fullname = os.path.join(dirName, filename)
                 root, ext = os.path.splitext(filename)
-                if ext.lower() == '.jpg':
+                if ext.lower() in self.extensions_to_exif_tag:
                     self.out_count_jpg += 1
                     if self.do_exif:
                         metadata = GExiv2.Metadata(fullname)
@@ -80,6 +114,7 @@ class ExifFolderTagger:
                             meta_desc = str(tag).strip()
                             # only add to meta data if not already added done in a previous run
                             if self.already_renamed_exp.match(meta_desc):
+                                self.out_skipped += 1
                                 continue  # we updated this in a previous run
                             else:
                                 if not (len(meta_desc) == 0 or
@@ -91,6 +126,7 @@ class ExifFolderTagger:
                             for tag_name in self.tag_names:
                                 metadata[tag_name] = new_meta_desc
                             metadata.save_file()
+                        self.out_exif_changed += 1
                 else:
                     if ext.lower() in self.extensions_to_rename:
                         base = os.path.basename(fullname)
@@ -106,8 +142,10 @@ class ExifFolderTagger:
                             print('rm %s' % fullname)
                             if self.do_write:
                                 os.remove(fullname)
+                            self.out_removed += 1
                         else:
                             self.out_extensions_found.add(ext.lower())
+                            self.out_ignored += 1
                             print(TermColors.OK_BLUE + "IGNORED: %s" % fullname + TermColors.END_C)
                     self.out_count_non_jpg += 1
 
@@ -116,7 +154,11 @@ class ExifFolderTagger:
         print(TermColors.OK_BLUE)
         print("non matching folders = \n" + str(self.out_bad_folders))
         print(TermColors.END_C)
-        print("\n\nTOTAL JPG=%d NON-JPG=%d, SUM=%d" % (self.out_count_jpg, self.out_count_non_jpg,
+        print("\n\nTOTAL Exif=%d NON-Exif=%d, SUM=%d" % (self.out_count_jpg, self.out_count_non_jpg,
                                                        self.out_count_jpg + self.out_count_non_jpg))
+        print("\nTOTAL ignored=%d" % self.out_ignored)
         print("TOTAL renamed=%d" % self.out_renamed)
+        print("TOTAL exif skipped=%d" % self.out_skipped)
+        print("TOTAL exif updated=%d" % self.out_exif_changed)
+        print("TOTAL exif updated=%d" % self.out_removed)
         print("\nunknown extensions = " + str(self.out_extensions_found))
