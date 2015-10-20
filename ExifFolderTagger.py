@@ -40,7 +40,7 @@ class ExifFolderTagger:
             (re.compile('(\d\d\d\d)'), 'Y%s'),
         ]
 
-        # expression that matches all folder description formatters above - used to detect an already processed tag
+        # an expression that matches all folder description formatters above - used to detect an already processed tag
         self.already_renamed_exp = re.compile('Y\d\d\d\d.*')
 
         # list of file extension to which we apply exif tags (use lower case only)
@@ -48,7 +48,7 @@ class ExifFolderTagger:
             '.jpg'
         ]
 
-        # list of file extensions to rename - these filetypes are uploaded to google photos but have no exif -
+        # list of file extensions to rename - these file-types are uploaded to google photos but have no exif -
         # google photos does search on filename so these will still be searchable (use lower case only)
         self.extensions_to_rename = [
             '.tif', '.gif', '.mpg', '.mp4', '.avi', '.bmp', '.mov', '.png', '.wmv', '.3gp', '.ico'
@@ -148,7 +148,6 @@ class ExifFolderTagger:
                             self.out_ignored += 1
                             print(TermColors.OK_BLUE + "IGNORED: %s" % fullname + TermColors.END_C)
                     self.out_count_non_jpg += 1
-
 
     def report(self):
         print(TermColors.OK_BLUE)

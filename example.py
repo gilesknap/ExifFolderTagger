@@ -15,6 +15,7 @@ tagger.descriptions_to_ignore = [
             'DCP', 'DIGITAL CAMERA', 'Camera',
         ]
 
+# the following 2 settings would switch to doing file renames only, and not use exif tags
 #tagger.extensions_to_exif_tag = []
 #tagger.extensions_to_rename.append('.jpg')
 
