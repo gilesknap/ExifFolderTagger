@@ -77,6 +77,8 @@ class ExifFolderTagger:
 
         self.out_bad_dates = 0
         self.out_ok_dates = 0
+        self.out_bad_times = 0
+        self.out_ok_times = 0
 
         if do_exif:
             from gi.repository import GExiv2
@@ -127,9 +129,12 @@ class ExifFolderTagger:
                                     print(TermColors.FAIL + "%s : >%s< --> >%s<" %
                                           (fullname, meta_desc, new_meta_desc) + TermColors.END_C)
                         if self.do_write:
+                            file_time = os.path.getmtime(fullname)
                             for tag_name in self.tag_names:
                                 metadata[tag_name] = new_meta_desc
                             metadata.save_file()
+                            # restore original modified date
+                            os.utime(fullname, (file_time,file_time))
                         self.out_exif_changed += 1
                 else:
                     if ext.lower() in self.extensions_to_rename:
@@ -166,10 +171,13 @@ class ExifFolderTagger:
         print("TOTAL exif updated=%d" % self.out_removed)
         print("\nunknown extensions = " + str(self.out_extensions_found))
 
-    def check_dates(self, day_count_tolerance):
+    def check_dates(self, day_count_tolerance=30, seconds_tolerance=10, use_file_names=False):
         folder_expressions = [
-            (re.compile('(\d\d\d\d)/\d\d\d\d-(\d\d)-(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
-            (re.compile('(\d\d\d\d)/(\d\d)(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+            (re.compile('(\d\d\d\d)/\d\d\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+            (re.compile('(\d\d\d\d)/(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+        ]
+        file_expressions = [
+            (re.compile('(\d\d\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) (\d\d).(\d\d).(\d\d).*'), '%s %s %s %s %s %s'),
         ]
         for dirName, subdirList, fileList in os.walk(self.root_folder):
             folder_name = os.path.relpath(dirName, self.root_folder)
@@ -178,22 +186,47 @@ class ExifFolderTagger:
             for reg, pat in folder_expressions:
                 m = reg.match(ExifFolderTagger.normalize_path(folder_name))
                 if m:
-                    description = pat % m.groups()
-                    folder_date = datetime.strptime(description[0:13], "Y%Y M%m D%d")
-                    # print(folder_date, description)
+                    time_string = pat % m.groups()
+                    folder_date = datetime.strptime(time_string, "Y%Y M%m D%d")
+                    print('FOLDER :', datetime.ctime(folder_date), time_string)
                     matched = True
                     break
             if not matched:
+                pass
                 print("NO DATE", folder_name)
-            else:
-                for filename in fileList:
-                    fullname = os.path.join(dirName, filename)
-                    file_date = datetime.fromtimestamp(os.path.getmtime(fullname))
-                    if(file_date - folder_date).days > day_count_tolerance:
-                        print ('Wrong Date : ', datetime.ctime(file_date), fullname)
+
+            for filename in fileList:
+                fullname = os.path.join(dirName, filename)
+                file_date = datetime.fromtimestamp(os.path.getmtime(fullname))
+
+                if matched:
+                    if file_date > folder_date:
+                        error = (file_date - folder_date).days
+                    else:
+                        error = (folder_date - file_date).days
+                    if error > day_count_tolerance:
+                        print ('Modify Date does not match folder name : ', error, datetime.ctime(file_date), fullname)
                         self.out_bad_dates += 1
                     else:
                         self.out_ok_dates += 1
 
+                if use_file_names:
+                    for reg, pat in file_expressions:
+                        m = reg.match(filename)
+                        if m:
+                            time_string = pat % m.groups()
+                            file_name_date = datetime.strptime(time_string, "%Y %m %d %H %M %S")
+                            if file_name_date > file_date:
+                                error = (file_name_date - file_date).seconds
+                            else:
+                                error = (file_date - file_name_date).seconds
+                            if error > seconds_tolerance:
+                                print ('Modify Date does not match FILE name : ', datetime.ctime(file_date), fullname)
+                                self.out_bad_times +=1
+                            else:
+                                self.out_ok_times += 1
+
         print('bad dates =',  self.out_bad_dates)
         print('OK dates  =',  self.out_ok_dates)
+        print('bad filename times =',  self.out_bad_times)
+        print('OK filename times  =',  self.out_ok_times)
