@@ -19,5 +19,7 @@ tagger.descriptions_to_ignore = [
 #tagger.extensions_to_exif_tag = []
 #tagger.extensions_to_rename.append('.jpg')
 
-tagger.go()
-tagger.report()
+tagger.check_dates(60)
+
+#tagger.go()
+#tagger.report()

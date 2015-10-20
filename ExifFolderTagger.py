@@ -1,7 +1,8 @@
 import os
 from TermColors import TermColors
 import re
-
+import time
+from datetime import date, datetime
 
 class ExifFolderTagger:
     def __init__(self, do_write=False, do_exif=True):
@@ -73,6 +74,9 @@ class ExifFolderTagger:
         self.out_skipped = 0
         self.out_exif_changed = 0
         self.out_removed = 0
+
+        self.out_bad_dates = 0
+        self.out_ok_dates = 0
 
         if do_exif:
             from gi.repository import GExiv2
@@ -161,3 +165,35 @@ class ExifFolderTagger:
         print("TOTAL exif updated=%d" % self.out_exif_changed)
         print("TOTAL exif updated=%d" % self.out_removed)
         print("\nunknown extensions = " + str(self.out_extensions_found))
+
+    def check_dates(self, day_count_tolerance):
+        folder_expressions = [
+            (re.compile('(\d\d\d\d)/\d\d\d\d-(\d\d)-(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+            (re.compile('(\d\d\d\d)/(\d\d)(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+        ]
+        for dirName, subdirList, fileList in os.walk(self.root_folder):
+            folder_name = os.path.relpath(dirName, self.root_folder)
+            # get the date as expressed in the folder hierarchy
+            matched = False
+            for reg, pat in folder_expressions:
+                m = reg.match(ExifFolderTagger.normalize_path(folder_name))
+                if m:
+                    description = pat % m.groups()
+                    folder_date = datetime.strptime(description[0:13], "Y%Y M%m D%d")
+                    # print(folder_date, description)
+                    matched = True
+                    break
+            if not matched:
+                print("NO DATE", folder_name)
+            else:
+                for filename in fileList:
+                    fullname = os.path.join(dirName, filename)
+                    file_date = datetime.fromtimestamp(os.path.getmtime(fullname))
+                    if(file_date - folder_date).days > day_count_tolerance:
+                        print ('Wrong Date : ', datetime.ctime(file_date), fullname)
+                        self.out_bad_dates += 1
+                    else:
+                        self.out_ok_dates += 1
+
+        print('bad dates =',  self.out_bad_dates)
+        print('OK dates  =',  self.out_ok_dates)
