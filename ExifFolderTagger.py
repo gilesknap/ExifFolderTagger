@@ -2,11 +2,13 @@ import os
 from TermColors import TermColors
 import re
 
-# root_folder = os.path.abspath("/scratch/Pictures")
-# root_folder = os.path.abspath("E:/PhotosWithTags/Pictures")
-root_folder = os.path.abspath("/mnt/E_DRIVE/PhotosWithTagsTmp")
-do_write = True
-do_exif = True
+
+class ExifFolderTagger():
+
+    def __init__(self, do_write = True, do_exif = True):
+        # Default Values for control parameters
+        # User should set these if necessary
+        self.root_folder = os.path.abspath("/mnt/E_DRIVE/PhotosWithTagsTmp")
 tag_name = "Exif.Image.ImageDescription"
 tag_name2 = "Xmp.dc.Description"
 tag_name3 = "Xmp.dc.Title"

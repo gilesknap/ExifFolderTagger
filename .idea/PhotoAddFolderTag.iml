@@ -4,7 +4,7 @@
     <content url="file://$MODULE_DIR$" />
     <content url="file://$MODULE_DIR$/../PhotoMove" />
     <content url="file://$MODULE_DIR$/../Shared" />
-    <orderEntry type="jdk" jdkName="Python 2.7.8 (C:\Python27\python.exe)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.4.3 (/usr/bin/python3.4)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
