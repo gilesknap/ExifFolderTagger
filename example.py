@@ -10,7 +10,8 @@ tagger = ExifFolderTagger()
 #tagger.root_folder = '/media/500GB Freecom/BigData/Pictures'
 #tagger.root_folder = '/media/500GB Freecom/BigData/Pictures/2012/0811 More Noah/2012-08-11 Noah'
 tagger.root_folder = '/mnt/E_DRIVE/PhotosWithTags/Pictures'
-tagger.root_folder = '/mnt/E_DRIVE/PhotosWithTags/Pictures/0000 Noah/2012 Noah Best'
+tagger.root_folder = '/mnt/E_DRIVE/PhotosWithTags/Pictures/2015/0801- Aug  Sep TBS'
+#tagger.root_folder = '/mnt/E_DRIVE/PhotosWithTags/Pictures/2015'
 
 tagger.extensions_to_remove = [
             '.db', '.ini', '.info', '.exe', '.url', '.tmp', '.wav', '.txt', '.thm',

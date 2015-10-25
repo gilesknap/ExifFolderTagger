@@ -35,9 +35,9 @@ class ExifFolderTagger:
             "Xmp.dc.Title",
         ]
         self.tag_dates = [
-            'Xmp.CreateDate'
             'Exif.Photo.DateTimeOriginal',
             'Exif.Photo.DateTimeDigitized',
+            'Xmp.xmp.CreateDate'
         ]
 
         # expressions to apply to the full path in a tuple with the folder description formatter to apply if this
@@ -61,6 +61,20 @@ class ExifFolderTagger:
 
         # an expression that matches all folder description formatters above - used to detect an already processed tag
         self.already_renamed_exp = re.compile('Y\d\d\d\d.*')
+
+        # expressions for extracting date from folder names - for date checking
+        self.folder_expressions = [
+            (re.compile('(\d\d\d\d)/\d\d\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+            (re.compile('(\d\d\d\d)/(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
+        ]
+
+        # expressions for extracting date from file names - for date checking
+        self.file_expressions = [
+            (re.compile('(\d\d\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) (\d\d).(\d\d).(\d\d).*'),
+             '%s %s %s %s %s %s'),
+            (re.compile('.*(19|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d\d)(\d\d)(\d\d).*'),
+             '%s %s %s %s %s %s'),
+        ]
 
         # list of file extension to which we apply exif tags (use lower case only)
         self.extensions_to_exif_tag = [
@@ -197,18 +211,6 @@ class ExifFolderTagger:
         print("\nunknown extensions = " + str(self.out_extensions_found))
 
     def check_dates(self):
-        # todo move these expressions to class level?
-        folder_expressions = [
-            (re.compile('(\d\d\d\d)/\d\d\d\d-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
-            (re.compile('(\d\d\d\d)/(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01]).*'), 'Y%s M%s D%s'),
-        ]
-        file_expressions = [
-            (re.compile('(\d\d\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) (\d\d).(\d\d).(\d\d).*'),
-             '%s %s %s %s %s %s'),
-            (re.compile('.*(19|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d\d)(\d\d)(\d\d).*'),
-                         '%s %s %s %s %s %s'),
-        ]
-
         if self.do_exif:
             from gi.repository import GExiv2
 
@@ -219,7 +221,7 @@ class ExifFolderTagger:
                 continue
             # get the date as expressed in the folder hierarchy
             matched = False
-            for reg, pat in folder_expressions:
+            for reg, pat in self.folder_expressions:
                 m = reg.match(normalize_path(folder_name))
                 if m:
                     time_string = pat % m.groups()
@@ -230,16 +232,18 @@ class ExifFolderTagger:
                     break
             if not matched:
                 print("{1}FOLDER with NO DATE parsed: {0}{2}".format(
-                    folder_name, TermColors.BOLD + TermColors.OK_BLUE, TermColors.END_C))
+                    folder_name, TermColors.BOLD + TermColors.OK_BLUE + TermColors.UNDERLINE, TermColors.END_C))
 
             for filename in fileList:
                 fullname = os.path.join(dirName, filename)
                 file_date = datetime.fromtimestamp(os.path.getmtime(fullname))
 
+                file_is_exif = False
                 exif_date = ''
                 if self.do_exif:
                     root, ext = os.path.splitext(filename)
                     if ext.lower() in self.extensions_to_exif_tag:
+                        file_is_exif = True
                         metadata = GExiv2.Metadata(fullname)
                         for date_tag in self.tag_dates:
                             tag = metadata.get(date_tag, None)
@@ -250,8 +254,8 @@ class ExifFolderTagger:
                                     exif_date = '(exif)'
                                     break
                                 except Exception:
-                                    print("{2}ERROR:- bad date in {0), {1}{3}".format(
-                                          tag, fullname, TermColors.FAIL, TermColors.END_C))
+                                    print("{2}ERROR:- bad date in {0}, {1}{3}".format(
+                                          fullname, tag, TermColors.FAIL, TermColors.END_C))
 
                 if matched:
                     if file_date > folder_date:
@@ -259,14 +263,14 @@ class ExifFolderTagger:
                     else:
                         error = (folder_date - file_date).days
                     if error > self.day_count_tolerance:
-                        print('Folder Mismatch by {0} days. File{3} = {1} , filename = {2}'.format(
+                        print('Folder Mismatch. File{3} = {1} , filename = {2}. Out  by {0} days'.format(
                             error, date_format(file_date), filename, exif_date))
                         self.out_bad_dates += 1
                     else:
                         self.out_ok_dates += 1
 
                 if self.use_file_names:
-                    for reg, pat in file_expressions:
+                    for reg, pat in self.file_expressions:
                         m = reg.match(filename)
                         if m:
                             time_string = pat % m.groups()
@@ -277,15 +281,15 @@ class ExifFolderTagger:
                                 error = (file_date - file_name_date).seconds
                             if error > self.seconds_tolerance:
                                 print(
-                                    'Filename Mismatch by {0} seconds. Modify{4},Name Date = {1}, {2},filename = {3}'.
+                                    'Filename Mismatch. Modify{4},Name Date = {1}, {2},filename = {3}. Out by {0} seconds'.
                                         format(error, date_format(file_date), date_format(file_name_date),
                                                filename, exif_date))
                                 self.out_bad_times += 1
                                 if self.do_write:
-                                    if self.do_exif:
+                                    if file_is_exif:
                                         for tag_name in self.tag_dates:
                                             metadata[tag_name] = file_name_date.strftime(DATE_FORMAT)
-                                        metadata.save_file()
+                                            metadata.save_file()
                                     os.utime(fullname, (file_name_date.timestamp(), file_name_date.timestamp()))
                             else:
                                 self.out_ok_times += 1

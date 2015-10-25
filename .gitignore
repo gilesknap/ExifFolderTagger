@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .idea/
 .idea/*
+ExifFolderTagger.refactored.py
+errout.txt
+*~
+
