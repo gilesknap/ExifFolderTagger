@@ -289,7 +289,7 @@ class ExifFolderTagger:
                                     if file_is_exif:
                                         for tag_name in self.tag_dates:
                                             metadata[tag_name] = file_name_date.strftime(DATE_FORMAT)
-                                            metadata.save_file()
+                                        metadata.save_file()
                                     os.utime(fullname, (file_name_date.timestamp(), file_name_date.timestamp()))
                             else:
                                 self.out_ok_times += 1
