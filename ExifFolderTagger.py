@@ -1,9 +1,9 @@
 import os
 from TermColors import TermColors
 import re
-import time
-from datetime import date, datetime
-
+# import time
+from datetime import date, datetime, timedelta
+from gi.repository import GExiv2
 
 def normalize_path(path):
     return path.replace('\\', '/')
@@ -105,6 +105,7 @@ class ExifFolderTagger:
         self.day_count_tolerance = 30
         self.seconds_tolerance = 10
         self.use_file_names = True
+        self.set_dates_to_match_folder = False
 
         # Initialize members for gathering results
         self.out_extensions_found = set([])
@@ -122,10 +123,7 @@ class ExifFolderTagger:
         self.out_bad_times = 0
         self.out_ok_times = 0
 
-        if self.do_exif:
-            from gi.repository import GExiv2
-
-    def go(self):
+    def tag_files(self):
         for dirName, subdirList, fileList in os.walk(self.root_folder):
             folder_name = os.path.relpath(dirName, self.root_folder)
             if any(folder_name.startswith(s) for s in self.folders_to_exclude):
@@ -197,7 +195,7 @@ class ExifFolderTagger:
                             print(TermColors.OK_BLUE + "IGNORED: %s" % fullname + TermColors.END_C)
                     self.out_count_non_jpg += 1
 
-    def report(self):
+    def report_tag(self):
         print(TermColors.OK_BLUE)
         print("non matching folders = \n" + str(self.out_bad_folders))
         print(TermColors.END_C)
@@ -211,14 +209,12 @@ class ExifFolderTagger:
         print("\nunknown extensions = " + str(self.out_extensions_found))
 
     def check_dates(self):
-        if self.do_exif:
-            from gi.repository import GExiv2
-
         for dirName, subdirList, fileList in os.walk(self.root_folder):
             folder_name = os.path.relpath(dirName, self.root_folder)
             if any(folder_name.startswith(s) for s in self.folders_to_exclude):
                 print("FOLDER {0} Skipped ...".format(dirName))
                 continue
+
             # get the date as expressed in the folder hierarchy
             matched = False
             for reg, pat in self.folder_expressions:
@@ -239,6 +235,7 @@ class ExifFolderTagger:
                 file_date = datetime.fromtimestamp(os.path.getmtime(fullname))
 
                 file_is_exif = False
+                metadata = None
                 exif_date = ''
                 if self.do_exif:
                     root, ext = os.path.splitext(filename)
@@ -256,15 +253,17 @@ class ExifFolderTagger:
                                 except Exception:
                                     print("{2}ERROR:- bad date in {0}, {1}{3}".format(
                                           fullname, tag, TermColors.FAIL, TermColors.END_C))
+                                    self.set_file_date(fullname, file_date, metadata, file_is_exif)
 
                 if matched:
-                    if file_date > folder_date:
-                        error = (file_date - folder_date).days
-                    else:
-                        error = (folder_date - file_date).days
+                    error = self.date_difference(file_date, folder_date).days
                     if error > self.day_count_tolerance:
                         print('Folder Mismatch. File{3} = {1} , filename = {2}. Out  by {0} days'.format(
                             error, date_format(file_date), filename, exif_date))
+                        if self.set_dates_to_match_folder:
+                            # fix mismatched files to be right at the end of the date range allowed
+                            fix_date = folder_date + timedelta(days=self.day_count_tolerance, seconds=-10)
+                            self.set_file_date(fullname, fix_date, metadata, file_is_exif)
                         self.out_bad_dates += 1
                     else:
                         self.out_ok_dates += 1
@@ -275,25 +274,33 @@ class ExifFolderTagger:
                         if m:
                             time_string = pat % m.groups()
                             file_name_date = datetime.strptime(time_string, "%Y %m %d %H %M %S")
-                            if file_name_date > file_date:
-                                error = (file_name_date - file_date).seconds
-                            else:
-                                error = (file_date - file_name_date).seconds
+                            error = self.date_difference(file_name_date, file_date).seconds
                             if error > self.seconds_tolerance:
                                 print(
                                     'Filename Mismatch. Modify{4},Name Date = {1}, {2},filename = {3}. Out by {0} seconds'.
                                         format(error, date_format(file_date), date_format(file_name_date),
                                                filename, exif_date))
                                 self.out_bad_times += 1
-                                if self.do_write:
-                                    if file_is_exif:
-                                        for tag_name in self.tag_dates:
-                                            metadata[tag_name] = file_name_date.strftime(DATE_FORMAT)
-                                        metadata.save_file()
-                                    os.utime(fullname, (file_name_date.timestamp(), file_name_date.timestamp()))
+                                self.set_file_date(fullname, file_name_date, metadata, file_is_exif)
                             else:
                                 self.out_ok_times += 1
 
+    def set_file_date(self, fullname, file_date, metadata, file_is_exif=True):
+        if self.do_write:
+            if file_is_exif:
+                for tag_name in self.tag_dates:
+                    metadata[tag_name] = file_date.strftime(DATE_FORMAT)
+                metadata.save_file()
+            os.utime(fullname, (file_date.timestamp(), file_date.timestamp()))
+
+    def date_difference(self, date1, date2):
+        if date1 > date2:
+            diff = (date1 - date2)
+        else:
+            diff = (date2 - date1)
+        return diff
+
+    def report_dates(self):
         print('bad dates =', self.out_bad_dates)
         print('OK dates  =', self.out_ok_dates)
         print('bad filename times =', self.out_bad_times)
