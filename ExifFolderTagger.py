@@ -41,7 +41,7 @@ class ExifFolderTagger:
         ]
 
         # expressions to apply to the full path in a tuple with the folder description formatter to apply if this
-        # expression matches
+        # expression matchesExportGooglePhotos.py
         # These default expressions match files from the following examples
         #       "root/2015/2015-12-25 Christmas Family Visit/photo1.jpg"
         #       "root/2015/1225 Christmas Family Visit/photo1.jpg"

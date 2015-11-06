@@ -9,7 +9,7 @@ __author__ = 'hgv27681'
 def doFolderScan():
     try:
         c = FolderCompare()
-        c.compare('/media/500GB Freecom/BigData/Pictures', '/media/500GB Freecom/torrent')
+        c.compare('/mnt/E_DRIVE/Pictures/2006', '/mnt/E_DRIVE/PhotosWithTags/Pictures/2006')
 
     except Exception as e:
         print("Exception =", e)
