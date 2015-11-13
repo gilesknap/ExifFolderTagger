@@ -3,7 +3,7 @@ from TermColors import TermColors
 import re
 from datetime import date, datetime, timedelta
 from gi.repository import GExiv2
-
+import shutil
 # this class is used to compare two sets of photo collections
 # one of which has come down from google drive via google photo uploads
 # the other of which is local files or files that have been uploaded to
@@ -17,6 +17,7 @@ from gi.repository import GExiv2
 # exif date string format
 DATE_FORMAT = '%Y:%m:%d %H:%M:%S'
 
+
 class FolderCompare:
     def __init__(self):
         # expressions for extracting date from file names - for date checking
@@ -29,7 +30,8 @@ class FolderCompare:
         ]
         self.file_expressions = [
             (re.compile('(19|20\d\d)-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]) (\d\d).(\d\d).(\d\d).*\.(...)'), False),
-            (re.compile('.*_(19|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d\d)(\d\d)(\d\d).*\.(...)'), True),
+            # TODO TODO - change below to True for google rename handling (required for 2015 photos)
+            (re.compile('.*_(19|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])_(\d\d)(\d\d)(\d\d).*\.(...)'), False),
         ]
         self.list_names = ['left', 'right']
         self.file_lists = {}
@@ -45,28 +47,30 @@ class FolderCompare:
         self.extensions_to_ignore = [
             '.txt', '.pdf',
         ]
-        self.folders_to_exclude = []
+        self.useExif = True
         self.folders_to_exclude = []
 
-    def dictionary_compare(self, first_name, compare_name):
+    def dictionary_compare(self, first_name, compare_name, retry_folder):
         print("comparing {0} with {1}".format(first_name, compare_name))
 
-        for file_name,folder_dates in self.file_lists[first_name].iteritems():
+        for file_name, file_full_names in self.file_lists[first_name].iteritems():
             next_list = self.file_lists[compare_name]
-            first_count = len(folder_dates)
+            first_count = len(file_full_names)
             if file_name in next_list:
-                this_folder_dates = next_list[file_name]
-                this_count = len(this_folder_dates)
+                this_files = next_list[file_name]
+                this_count = len(this_files)
             else:
                 this_count = 0
             if first_count > this_count:   # use > so that mismatches are counted only once since we compare both ways
                 self.mismatch_count[first_name] += 1
-                this_full_name,this_date = folder_dates[0]
-                print('mismatch on index "{4}", {0} count={1}, {2} count={3}'.format(
-                    first_name, first_count, compare_name, this_count, file_name)
-                )
+                for file_full_name in file_full_names:
+                    print('mismatch on index "{4}", {0} count={1}, {2} count={3}, full={5}'.format(
+                        first_name, first_count, compare_name, this_count, file_name, file_full_name)
+                    )
+                    if retry_folder is not None:
+                        shutil.copy(file_full_name, retry_folder)
 
-    def compare(self, left, right):
+    def compare(self, left, right, retry_folder=None):
         print("skipping extensions {0}".format(self.extensions_to_ignore))
         print("skipping folders {0}".format(self.folders_to_exclude))
         print('using exif = {0}'.format(self.useExif))
@@ -110,22 +114,20 @@ class FolderCompare:
 
                     if file_name in self.file_lists[list_name].keys():
                         self.file_duplicates[list_name] += 1
-                        self.file_lists[list_name][file_name].append((full_name,file_date))
+                        self.file_lists[list_name][file_name].append(full_name)
                     else:
-                        self.file_lists[list_name][file_name] = [(full_name,file_date)]
+                        self.file_lists[list_name][file_name] = [full_name]
 
         # check for matches
         first_name = self.list_names[0]
         for compare_name in self.list_names[1:]:
-            self.dictionary_compare(first_name, compare_name)
+            # self.dictionary_compare(first_name, compare_name)
             print('############################################################################################')
             print('############################################################################################')
-            self.dictionary_compare(compare_name, first_name)
+            self.dictionary_compare(compare_name, first_name, retry_folder)
 
         for list_name in self.list_names:
             print('unique files read for {0} = {1}, duplicates = {2}, mismatches = {3}'.format(
-                list_name, len(self.file_lists[list_name]),self.file_duplicates[list_name],
+                list_name, len(self.file_lists[list_name]), self.file_duplicates[list_name],
                 self.mismatch_count[list_name]
             ))
-
-
